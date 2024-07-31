@@ -59,6 +59,31 @@ function request(method, path, data, callback) {
     }
 }
 
+async function getLastCommitSHA() {
+    try {
+        const repoResponse = await request('GET', `/repos/${env.INPUT_REPOSITORY}`);
+        if (repoResponse.statusCode !== 200) {
+            throw new Error(`Failed to fetch repo data, status: ${repoResponse.statusCode}`);
+        }
+
+        const defaultBranch = repoResponse.data.default_branch;
+
+        const commitsResponse = await request('GET', `/repos/${env.INPUT_REPOSITORY}/commits?sha=${defaultBranch}`);
+        if (commitsResponse.statusCode !== 200) {
+            throw new Error(`Failed to fetch commits, status: ${commitsResponse.statusCode}`);
+        }
+
+        if (commitsResponse.data && commitsResponse.data.length > 0) {
+            return commitsResponse.data[0].sha;
+        } else {
+            throw new Error('No commits found.');
+        }
+    } catch (error) {
+        console.error('Error fetching last commit SHA:', error);
+        return null;
+    }
+}
+
 function main() {
     const path = 'BUILD_NUMBER/BUILD_NUMBER';
     const prefix = env.INPUT_PREFIX ? `${env.INPUT_PREFIX}-` : '';
@@ -83,7 +108,7 @@ function main() {
     const repository = env.INPUT_REPOSITORY || env.GITHUB_REPOSITORY;
     console.log("repository: ", repository);
 
-    request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, (err, status, result) => {
+    request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, async (err, status, result) => {
         console.log("print result:");
         console.log(result);
     
@@ -119,9 +144,19 @@ function main() {
             } 
         }
 
+        let sha = env.GITHUB_SHA;
+
+        if (env.INPUT_REPOSITORY) {
+            const lastCommitSHA = await getLastCommitSHA();
+            if (lastCommitSHA) {
+                console.log(`Last commit SHA in the default branch: ${lastCommitSHA}`);
+                sha = lastCommitSHA;
+            }
+        }
+
         let newRefData = {
-            ref:`refs/tags/${prefix}build-number-${nextBuildNumber}`, 
-            sha: env.GITHUB_SHA
+            ref:`refs/tags/${prefix}build-number-${nextBuildNumber}`,
+            sha: sha
         };
     
         request('POST', `/repos/${repository}/git/refs`, newRefData, (err, status, result) => {
@@ -158,6 +193,3 @@ function main() {
 }
 
 main();
-
-
-
