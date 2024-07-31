@@ -59,29 +59,26 @@ function request(method, path, data, callback) {
     }
 }
 
-async function getLastCommitSHA() {
-    try {
-        const repoResponse = await request('GET', `/repos/${env.INPUT_REPOSITORY}`);
-        if (repoResponse.statusCode !== 200) {
-            throw new Error(`Failed to fetch repo data, status: ${repoResponse.statusCode}`);
+function getLastCommitSHA(repository, callback) {
+    request('GET', `/repos/${repository}`, null, (err, status, repoData) => {
+        if (err || status !== 200) {
+            return callback(err || new Error(`Failed to fetch repo data, status: ${status}`));
         }
 
-        const defaultBranch = repoResponse.data.default_branch;
+        const defaultBranch = repoData.default_branch;
 
-        const commitsResponse = await request('GET', `/repos/${env.INPUT_REPOSITORY}/commits?sha=${defaultBranch}`);
-        if (commitsResponse.statusCode !== 200) {
-            throw new Error(`Failed to fetch commits, status: ${commitsResponse.statusCode}`);
-        }
+        request('GET', `/repos/${repository}/commits?sha=${defaultBranch}`, null, (err, status, commitsData) => {
+            if (err || status !== 200) {
+                return callback(err || new Error(`Failed to fetch commits, status: ${status}`));
+            }
 
-        if (commitsResponse.data && commitsResponse.data.length > 0) {
-            return commitsResponse.data[0].sha;
-        } else {
-            throw new Error('No commits found.');
-        }
-    } catch (error) {
-        console.error('Error fetching last commit SHA:', error);
-        return null;
-    }
+            if (commitsData && commitsData.length > 0) {
+                callback(null, commitsData[0].sha);
+            } else {
+                callback(new Error('No commits found.'));
+            }
+        });
+    });
 }
 
 function main() {
@@ -147,11 +144,14 @@ function main() {
         let sha = env.GITHUB_SHA;
 
         if (env.INPUT_REPOSITORY) {
-            const lastCommitSHA = await getLastCommitSHA();
-            if (lastCommitSHA) {
-                console.log(`Last commit SHA in the default branch: ${lastCommitSHA}`);
-                sha = lastCommitSHA;
-            }
+            getLastCommitSHA(env.INPUT_REPOSITORY, (err, lastCommitSHA) => {
+                if (err) {
+                    fail(`Failed to get the last commit SHA: ${err.message}`);
+                } else {
+                    console.log(`Last commit SHA in the default branch: ${lastCommitSHA}`);
+                    sha = lastCommitSHA;
+                }
+            });
         }
 
         let newRefData = {
