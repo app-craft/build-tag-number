@@ -59,10 +59,7 @@ function request(method, path, data, callback) {
     }
 }
 
-
 function main() {
-    console.log("print envs");
-    console.log(env);
     const path = 'BUILD_NUMBER/BUILD_NUMBER';
     const prefix = env.INPUT_PREFIX ? `${env.INPUT_PREFIX}-` : '';
 
@@ -83,7 +80,12 @@ function main() {
         }
     }
 
-    request('GET', `/repos/${env.GITHUB_REPOSITORY}/git/refs/tags/${prefix}build-number-`, null, (err, status, result) => {
+    const repository = env.INPUT_REPOSITORY || env.GITHUB_REPOSITORY;
+    console.log("repository: ", repository);
+
+    request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, (err, status, result) => {
+        console.log("print result:");
+        console.log(result);
     
         let nextBuildNumber, nrTags;
     
@@ -122,7 +124,7 @@ function main() {
             sha: env.GITHUB_SHA
         };
     
-        request('POST', `/repos/${env.GITHUB_REPOSITORY}/git/refs`, newRefData, (err, status, result) => {
+        request('POST', `/repos/${repository}/git/refs`, newRefData, (err, status, result) => {
             if (status !== 201 || err) {
                 fail(`Failed to create new build-number ref. Status: ${status}, err: ${err}, result: ${JSON.stringify(result)}`);
             }
@@ -141,7 +143,7 @@ function main() {
                 console.log(`Deleting ${nrTags.length} older build counters...`);
             
                 for (let nrTag of nrTags) {
-                    request('DELETE', `/repos/${env.GITHUB_REPOSITORY}/git/${nrTag.ref}`, null, (err, status, result) => {
+                    request('DELETE', `/repos/${repository}/git/${nrTag.ref}`, null, (err, status, result) => {
                         if (status !== 204 || err) {
                             console.warn(`Failed to delete ref ${nrTag.ref}, status: ${status}, err: ${err}, result: ${JSON.stringify(result)}`);
                         } else {
