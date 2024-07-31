@@ -61,7 +61,8 @@ function request(method, path, data, callback) {
 
 
 function main() {
-
+    console.log("print envs");
+    console.log(env);
     const path = 'BUILD_NUMBER/BUILD_NUMBER';
     const prefix = env.INPUT_PREFIX ? `${env.INPUT_PREFIX}-` : '';
 
