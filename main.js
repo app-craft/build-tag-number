@@ -28,6 +28,7 @@ function request(method, path, data, callback) {
                 'User-Agent' : 'GitHub Action - development'
             }
         }
+        console.log("options: ", options);
         const req = https.request(options, res => {
     
             let chunks = [];
@@ -103,8 +104,11 @@ function main() {
     }
 
     const repository = env.INPUT_REPOSITORY || env.GITHUB_REPOSITORY;
+    console.log("repository: ", repository);
 
     request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, async (err, status, result) => {
+        console.log("print result:");
+        console.log(result);
     
         let nextBuildNumber, nrTags;
     
@@ -139,7 +143,7 @@ function main() {
         }
 
         let sha = env.GITHUB_SHA;
-
+        console.log("INPUT_REPOSITORY: ", env.INPUT_REPOSITORY);
         if (env.INPUT_REPOSITORY) {
             getLastCommitSHA(env.INPUT_REPOSITORY, (err, lastCommitSHA) => {
                 if (err) {
