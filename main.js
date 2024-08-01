@@ -6,7 +6,7 @@ const   https = require('https'),
 
 function fail(message, exitCode=1) {
     console.log(`::error::${message}`);
-    process.exit(1);
+    process.exit(exitCode);
 }
 
 function request(method, path, data, callback) {
@@ -61,6 +61,9 @@ function request(method, path, data, callback) {
 }
 
 function getLastCommitSHA(repository, callback) {
+    if (!env.INPUT_REPOSITORY){
+        return callback(null, env.GITHUB_SHA);
+    }
     request('GET', `/repos/${repository}`, null, (err, status, repoData) => {
         if (err || status !== 200) {
             return callback(err || new Error(`Failed to fetch repo data, status: ${status}`));
@@ -106,7 +109,7 @@ function main() {
     const repository = env.INPUT_REPOSITORY || env.GITHUB_REPOSITORY;
     console.log("repository: ", repository);
 
-    request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, async (err, status, result) => {
+    request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, (err, status, result) => {
         console.log("print result:");
         console.log(result);
     
@@ -135,61 +138,57 @@ function main() {
             nextBuildNumber = currentBuildNumber + 1;
             console.log(`Updating build counter to ${nextBuildNumber}...`);
         } else {
-            if (err) {
+            if (err){
                 fail(`Failed to get refs. Error: ${err}, status: ${status}`);
             } else {
                 fail(`Getting build-number refs failed with http status ${status}, error: ${JSON.stringify(result)}`);
             } 
         }
 
-        let sha = env.GITHUB_SHA;
         console.log("INPUT_REPOSITORY: ", env.INPUT_REPOSITORY);
-        if (env.INPUT_REPOSITORY) {
-            getLastCommitSHA(env.INPUT_REPOSITORY, (err, lastCommitSHA) => {
-                if (err) {
-                    fail(`Failed to get the last commit SHA: ${err.message}`);
-                } else {
-                    console.log(`Last commit SHA in the default branch: ${lastCommitSHA}`);
-                    sha = lastCommitSHA;
-                }
-            });
-        }
-
-        let newRefData = {
-            ref:`refs/tags/${prefix}build-number-${nextBuildNumber}`,
-            sha: sha
-        };
-    
-        request('POST', `/repos/${repository}/git/refs`, newRefData, (err, status, result) => {
-            if (status !== 201 || err) {
-                fail(`Failed to create new build-number ref. Status: ${status}, err: ${err}, result: ${JSON.stringify(result)}`);
-            }
-
-            console.log(`Successfully updated build number to ${nextBuildNumber}`);
+        getLastCommitSHA(repository, (err, lastCommitSHA) => {
+            if (err) {
+                fail(`Failed to get the last commit SHA: ${err.message}`);
+            } else {
+                console.log(`Last commit SHA in the default branch: ${lastCommitSHA}`);
+                let newRefData = {
+                    ref:`refs/tags/${prefix}build-number-${nextBuildNumber}`,
+                    sha: lastCommitSHA
+                };
             
-            //Setting the output and a environment variable to new build number...
-            fs.writeFileSync(process.env.GITHUB_OUTPUT, `build_number=${nextBuildNumber}`);
-            fs.writeFileSync(process.env.GITHUB_ENV, `BUILD_NUMBER=${nextBuildNumber}`);
- 
-            //Save to file so it can be used for next jobs...
-            fs.writeFileSync('BUILD_NUMBER', nextBuildNumber.toString());
-            
-            //Cleanup
-            if (nrTags) {
-                console.log(`Deleting ${nrTags.length} older build counters...`);
-            
-                for (let nrTag of nrTags) {
-                    request('DELETE', `/repos/${repository}/git/${nrTag.ref}`, null, (err, status, result) => {
-                        if (status !== 204 || err) {
-                            console.warn(`Failed to delete ref ${nrTag.ref}, status: ${status}, err: ${err}, result: ${JSON.stringify(result)}`);
-                        } else {
-                            console.log(`Deleted ${nrTag.ref}`);
+                request('POST', `/repos/${repository}/git/refs`, newRefData, (err, status, result) => {
+                    if (status !== 201 || err) {
+                        fail(`Failed to create new build-number ref. Status: ${status}, err: ${err}, result: ${JSON.stringify(result)}`);
+                    }
+        
+                    console.log(`Successfully updated build number to ${nextBuildNumber}`);
+                    
+                    //Setting the output and a environment variable to new build number...
+                    fs.writeFileSync(process.env.GITHUB_OUTPUT, `build_number=${nextBuildNumber}`);
+                    fs.writeFileSync(process.env.GITHUB_ENV, `BUILD_NUMBER=${nextBuildNumber}`);
+         
+                    //Save to file so it can be used for next jobs...
+                    fs.writeFileSync('BUILD_NUMBER', nextBuildNumber.toString());
+                    
+                    //Cleanup
+                    if (nrTags) {
+                        console.log(`Deleting ${nrTags.length} older build counters...`);
+                    
+                        for (let nrTag of nrTags){
+                            request('DELETE', `/repos/${repository}/git/${nrTag.ref}`, null, (err, status, result) => {
+                                if (status !== 204 || err) {
+                                    console.warn(`Failed to delete ref ${nrTag.ref}, status: ${status}, err: ${err}, result: ${JSON.stringify(result)}`);
+                                } else {
+                                    console.log(`Deleted ${nrTag.ref}`);
+                                }
+                            });
                         }
-                    });
-                }
+                    }
+        
+                });
             }
-
         });
+
     });
 }
 
