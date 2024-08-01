@@ -103,11 +103,8 @@ function main() {
     }
 
     const repository = env.INPUT_REPOSITORY || env.GITHUB_REPOSITORY;
-    console.log("repository: ", repository);
 
     request('GET', `/repos/${repository}/git/refs/tags/${prefix}build-number-`, null, async (err, status, result) => {
-        console.log("print result:");
-        console.log(result);
     
         let nextBuildNumber, nrTags;
     
