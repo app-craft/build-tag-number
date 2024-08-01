@@ -11,6 +11,9 @@ inputs:
   prefix:
     description: 'Prefix for the build-number-<num> tag to make it unique if tracking multiple build numbers'
     required: false
+  repository:
+    description: 'Repositroy where tags with builds number will be stored'
+    required: false
 
 outputs:
   build_number:
